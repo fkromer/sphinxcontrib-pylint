@@ -10,8 +10,9 @@
     :license: MIT.
 """
 
-#from pylint import epylint as lint
 import os.path
+import re
+import subprocess
 from docutils import nodes
 from sphinx.util.compat import Directive
 
@@ -42,15 +43,57 @@ class MessageListDirective(Directive):
 
         return [message_list_node]
 
+def run_pylint(builder, options):
+    for el in options:
+        if el is None:
+            builder.info('sphinxcontrib.pylint: option dicarded {}'.format(el))
+            options.remove(el)
+        if el is isinstance(el, bool):
+            builder.info('sphinxcontrib.pylint: option dicarded {}'.format(el))
+            options.remove(el)
+        if el is isinstance(el, int):
+            builder.info('sphinxcontrib.pylint: option dicarded {}'.format(el))
+            options.remove(el)
+    if builder.config.pylint_debug:
+        builder.info('sphinxcontrib.pylint: {}'.format(options))
+
+    try:
+        [el for el in options if isinstance(el, str)]
+    except:
+        raise ValueError('unknown format: {}'.format(el))
+
+    #print('{}'.format(os.getcwd()))
+    command = 'pylint --reports=no --output-format=parseable ' + ' '.join(options) + ' ' + 'bzr.py'
+    if builder.config.pylint_debug:
+        builder.info('sphinxcontrib.pylint: command - {}'.format(command))
+    # TODO pass the sphinx-doc source root directory as cwd to Popen
+    pylint_output = subprocess.Popen(['pylint', '--reports=no', '--msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}', '../bzr.py'], stdout=subprocess.PIPE)
+    output = pylint_output.stdout.read().decode("utf-8")
+    if builder.config.pylint_debug:
+        builder.info('sphinxcontrib.pylint: output - {}'.format(output))
+    
+    # GitHub Gist of andialbrecht about regex to parse errors from pylint output:
+    # https://gist.github.com/andialbrecht/917126
+    PYLINT_ERROR_REGEX = re.compile(r"""^(?P<file>.+?):(?P<line>[0-9]+):\ # file name and line number
+\[(?P<type>[a-z])(?P<errno>\d+)   # message type and error number, e.g. E0101
+(,\ (?P<hint>.+))?\]\             # optional class or function name
+(?P<msg>.*)                       # finally, the error message
+""", re.IGNORECASE|re.VERBOSE)
+    #PYLINT_ERROR_REGEX = regexp.MustCompile('^(?P<file>.+?):(?P<line>[0-9]+): \[(?P<code>[A-Z][0-9]+)\((?P<key>.*)\), \] (?P<msg>.*)')
+    pylint_messages = re.match(PYLINT_ERROR_REGEX, output)
+    #for m in re.finditer(PYLINT_ERROR_REGEX, output):
+    #    builder.info('{}'.format(m.groups()))
+    if builder.config.pylint_debug:
+        builder.info('sphinxcontrib.pylint: messages - {}'.format(pylint_messages))
 
 def get_general_options(builder):
-    general_options = [builder.config.pylint_ignore, builder.config.pylint_jobs]
+    general_options = ['--ignore=' + builder.config.pylint_ignore, '--jobs=' + builder.config.pylint_jobs]
     return general_options
 
 def get_message_control_options(builder):
     if builder.config.pylint_confidence not in ('HIGH', 'INFERENCE', 'INFERENCE_FAILURE', 'UNDEFINED'):
         raise ValueError('Unsupported option value: %s' % builder.config.pylint_confidence)
-    message_control_options = [builder.config.pylint_confidence, builder.config.pylint_enable, builder.config.pylint_disable]
+    message_control_options = ['--confidence=' + builder.config.pylint_confidence, '--enable=' + builder.config.pylint_enable, '--disable=' + builder.config.pylint_disable]
     return message_control_options
 
 def on_builder_inited(self):
@@ -66,16 +109,13 @@ def on_builder_inited(self):
         self.builder.info('sphinxcontrib.pylint:   config values {}'.format(options))
 
 def on_doctree_resolved(self, doctree, docname):
-    # run pylint
-    #pylint_options = ['report=no', 'output-format=parseable', '../tests/brz.py']
-    #lint.py_run(pylint_options)
     if self.builder.config.pylint_debug:
         self.builder.info('sphinxcontrib.pylint: execute on_doctree_resolved()...')
     
-    self.builder.info('sphinxcontrib.pylint: TODO run pylint with options {}'.format(options))
-
-    # TODO replace this fake message list with the messages from pylint
-    messages = [['C', 'test1.py', 'warning', '14', '15', '16'], ['F', 'test2.py', 'fatal', '24', '25', '26']]
+    # TODO remove the message overriding with the fake messages
+    # pylints default message format: {path}:{line}: [{msg_id}({symbol}), {obj}] {msg}
+    messages =  run_pylint(self.builder, options) 
+    messages = [['bzr.py', '10', 'E0401', 'import-error', '', 'Unable to import \'paver.options\''], ['bzr.py', '16', 'C0111', 'missing-docstring', 'do_bzr_cmd', 'Missing function docstring']]
 
     # output message list into table
     for node in doctree.traverse(message_list):
@@ -83,21 +123,21 @@ def on_doctree_resolved(self, doctree, docname):
             self.builder.info('sphinxcontrib.pylint:   process message list directive...')
         table = nodes.table()
         tgroup = nodes.tgroup()
-        category_colspec = nodes.colspec(colwidth=5)
-        module_colspec = nodes.colspec(colwidth=5)
-        object_colspec = nodes.colspec(colwidth=5)
+        path_colspec = nodes.colspec(colwidth=5)
         line_colspec = nodes.colspec(colwidth=5)
-        column_colspec = nodes.colspec(colwidth=5)
-        message_colspec = nodes.colspec(colwidth=5)
-        tgroup += [category_colspec, module_colspec, object_colspec, line_colspec, column_colspec, message_colspec]
+        msg_id_colspec = nodes.colspec(colwidth=5)
+        symbol_colspec = nodes.colspec(colwidth=5)
+        obj_colspec = nodes.colspec(colwidth=5)
+        msg_colspec = nodes.colspec(colwidth=5)
+        tgroup += [path_colspec, line_colspec, msg_id_colspec, symbol_colspec, obj_colspec, msg_colspec]
         tgroup += nodes.thead('', nodes.row(
             '',
-            nodes.entry('', nodes.paragraph('', 'Category')),
-            nodes.entry('', nodes.paragraph('', 'Module')),
-            nodes.entry('', nodes.paragraph('', 'Object')),
-            nodes.entry('', nodes.paragraph('', 'Line')),
-            nodes.entry('', nodes.paragraph('', 'Column')),
-            nodes.entry('', nodes.paragraph('', 'Message'))))
+            nodes.entry('', nodes.paragraph('', 'path')),
+            nodes.entry('', nodes.paragraph('', 'line')),
+            nodes.entry('', nodes.paragraph('', 'msg_id')),
+            nodes.entry('', nodes.paragraph('', 'symbol')),
+            nodes.entry('', nodes.paragraph('', 'obj')),
+            nodes.entry('', nodes.paragraph('', 'msg'))))
         tbody = nodes.tbody()
         tgroup += tbody
         table += tgroup
@@ -105,18 +145,18 @@ def on_doctree_resolved(self, doctree, docname):
             if self.builder.config.pylint_debug:
                 self.builder.info('sphinxcontrib.pylint:      process message...')
             row = nodes.row()
-            category = nodes.entry('', nodes.paragraph('', m[0]))
-            module = nodes.entry('', nodes.paragraph('', m[1]))
-            obj = nodes.entry('', nodes.paragraph('', m[2]))
-            line = nodes.entry('', nodes.paragraph('', m[3]))
-            column = nodes.entry('', nodes.paragraph('', m[4]))
-            message = nodes.entry('', nodes.paragraph('', m[5]))
-            row += category
-            row += module
-            row += obj
+            path = nodes.entry('', nodes.paragraph('', m[0]))
+            line = nodes.entry('', nodes.paragraph('', m[1]))
+            msg_id = nodes.entry('', nodes.paragraph('', m[2]))
+            symbol = nodes.entry('', nodes.paragraph('', m[3]))
+            obj = nodes.entry('', nodes.paragraph('', m[4]))
+            msg = nodes.entry('', nodes.paragraph('', m[5]))
+            row += path
             row += line
-            row += column
-            row += message
+            row += msg_id
+            row += symbol
+            row += obj
+            row += msg
             tbody += row
             if self.builder.config.pylint_debug:
                 self.builder.info('sphinxcontrib.pylint:      ... message processed')

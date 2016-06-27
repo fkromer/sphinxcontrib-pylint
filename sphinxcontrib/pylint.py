@@ -43,6 +43,79 @@ class MessageListDirective(Directive):
 
         return [message_list_node]
 
+class Pyreverse(object):
+    def __init__(self, file_or_dir, output_format='dot', output_name=None, ancestor_depth=None, class_depth=None, module_consideration=False, filtering=None, classes_only=False, builtins=False, project=None):
+        self.output_format = output_format
+        self.output_name = output_name
+        self.ancestor_search_depth = ancestor_depth
+        self.associated_classes_depth = class_depth
+        self.module_name_consideration = module_consideration
+        self.attribute_filtering = filtering
+        self.__attribute_filters = ['PUB_ONLY', 'SPECIAL', 'OTHER', 'ALL']
+        self.show_classes_only = classes_only
+        self.show_builtin_objects = builtins
+        self.file_or_directory = file_or_dir
+        self.project_name = project
+        self.__option_list = []
+        self.__command_list = []
+
+    def _create_command(self):
+        """
+        >>> p = Pyreverse('test.py')
+        >>> p._create_command()
+        ['pyreverse', '-odot', '-mn', 'test.py']
+
+        >>> p1 = Pyreverse('test.py', 'dot', 'test', 'ALL', 'ALL', True, "PUB_ONLY", True, True)
+        >>> p1._create_command()
+        ['pyreverse', '-odot', '-ctest', '-A', '-S', '-my', '-fPUB_ONLY', '-k', '-b', 'test.py']
+
+
+        >>> p2 = Pyreverse('../tests/package/test.py', 'svg', 'test', 3, 2, False, 'SPECIAL', False, False, 'package')
+        >>> p2._create_command()
+        ['pyreverse', '-osvg', '-ctest', '-a3', '-s2', '-mn', '-fSPECIAL', '../tests/package/test.py', 'package']
+        """
+        if self.output_format:
+            self.__option_list.append("-o"+self.output_format)
+        if self.output_name:
+            self.__option_list.append("-c"+self.output_name)
+        if self.ancestor_search_depth == 'ALL':
+            self.__option_list.append("-A")
+        elif isinstance(self.ancestor_search_depth, int):
+            self.__option_list.append("-a"+str(self.ancestor_search_depth))
+        else:
+            pass
+        if self.associated_classes_depth == 'ALL':
+            self.__option_list.append("-S")
+        elif isinstance(self.associated_classes_depth, int):
+            self.__option_list.append("-s"+str(self.associated_classes_depth))
+        else:
+            pass
+        if self.module_name_consideration:
+            self.__option_list.append("-my")
+        else:
+            self.__option_list.append("-mn")
+        if self.attribute_filtering in self.__attribute_filters:
+            self.__option_list.append("-f"+self.attribute_filtering)
+        if self.show_classes_only:
+            self.__option_list.append("-k")
+        if self.show_builtin_objects:
+            self.__option_list.append("-b")
+        self.__command_list.append("pyreverse")
+        for o in self.__option_list:
+            self.__command_list.append(o)
+        self.__command_list.append(self.file_or_directory)
+        if self.project_name:
+            self.__command_list.append(self.project_name)
+        return self.__command_list
+
+    def run(self):
+        """
+        >>> p = Pyreverse('../tests/package/test.py', 'png', 'TestClass', 'ALL', 'ALL', True, "PUB_ONLY", True, True )
+        >>> p.run() 
+        """
+        command = self._create_command()
+        console_output = subprocess.check_output(command).decode("utf-8")
+
 def run_pylint(builder, options):
     for el in options:
         if el is None:

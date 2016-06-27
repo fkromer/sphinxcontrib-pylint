@@ -1,0 +1,4 @@
+
+class TestClass(object):
+    pass
+

@@ -14,11 +14,18 @@ import os.path
 import re
 import subprocess
 from docutils import nodes
+from docutils.parsers.rst import directives
 from sphinx.util.compat import Directive
 
 options = []
 
 class message_list(nodes.General, nodes.Element):
+    pass
+
+class package_diagram(nodes.General, nodes.Element):
+    pass
+
+class class_diagram(nodes.General, nodes.Element):
     pass
 
 class MessageListDirective(Directive):
@@ -42,6 +49,64 @@ class MessageListDirective(Directive):
             message_list_node['title'] = 'pylint message list'
 
         return [message_list_node]
+
+class PackageDiagramDirective(Directive):
+    """
+    Directive to insert the pyreverse package diagram as dot inlined.
+
+    Syntax::
+    
+        .. package-diagram::
+
+    """
+    def run(self):
+        return [package_diagram('')]
+
+class ClassDiagramDirective(Directive):
+    """
+    Directive to insert the pyreverse class diagram as dot inlined.
+
+    Syntax::
+    
+        .. class-diagram:: class_name
+           :ancestor_depth:
+           :class_depth:
+           :attribute_filtering:
+           :classes_only:
+           :builtins:
+
+    """
+    required_arguments = 1  # class_name
+    option_spec = {'class': directives.class_option,
+                   'ancestor_depth': directives.unchanged,
+                   'class_depth': directives.unchanged,
+                   'attribute_filtering': directives.unchanged,
+                   'classes_only': directives.unchanged,
+                   'builtins': directives.unchanged}
+    def run(self):
+        class_diagram_node = class_diagram('')
+        class_diagram_node['class_name'] = self.arguments[0]
+        if 'ancestor_depth' in self.options:
+            class_diagram_node['ancestor_depth'] = self.options['ancestor_depth']
+        else:
+            class_diagram_node['ancestor_depth'] = None
+        if 'class_depth' in self.options:
+            class_diagram_node['class_depth'] = self.options['class_depth']
+        else:
+            class_diagram_node['class_depth'] = None
+        if 'attribute_filtering' in self.options:
+            class_diagram_node['attribute_filtering'] = self.options['attribute_filtering']
+        else:
+            class_diagram_node['attribute_filtering'] = None
+        if 'classes_only' in self.options:
+            class_diagram_node['classes_only'] = self.options['classes_only']
+        else:
+            class_diagram_node['classes_only'] = None
+        if 'builtins' in self.options:
+            class_diagram_node['builtins'] = self.options['builtins']
+        else:
+            class_diagram_node['builtins'] = None
+        return [class_diagram_node]
 
 class Pyreverse(object):
     def __init__(self, file_or_dir, output_format='dot', output_name=None, ancestor_depth=None, class_depth=None, module_consideration=False, filtering=None, classes_only=False, builtins=False, project=None):
@@ -237,10 +302,34 @@ def on_doctree_resolved(self, doctree, docname):
         if self.builder.config.pylint_debug:
             self.builder.info('sphinxcontrib.pylint:   ... message list directive processed')
 
+    # output package diagrams TODO replace string fake output with dot code
+    for node in doctree.traverse(package_diagram):
+        content = nodes.paragraph('', 'FAKE PACKAGE DIAGRAM OUTPUT')
+        node.replace_self(content)
+
+    # output class diagrams TODO replace string fake output with dot code
+    for node in doctree.traverse(class_diagram):
+        content = nodes.paragraph('', 'FAKE CLASS DIAGRAM OUTPUT')
+        content.append(nodes.paragraph('', 'class name: {}'.format(node['class_name'])))
+        if node['ancestor_depth']:
+            content.append(nodes.paragraph('', 'ancestor depth: {}'.format(node['ancestor_depth'])))
+        if node['class_depth']:
+            content.append(nodes.paragraph('', 'class depth: {}'.format(node['class_depth'])))
+        if node['attribute_filtering']:
+            content.append(nodes.paragraph('', 'attribute_filtering: {}'.format(node['attribute_filtering'])))
+        if node['classes_only']:
+            content.append(nodes.paragraph('', 'classes_only: {}'.format(node['classes_only'])))
+        if node['builtins']:
+            content.append(nodes.paragraph('', 'builtins: {}'.format(node['builtins'])))
+        node.replace_self(content)
 
 def setup(app):
     app.add_node(message_list)
+    app.add_node(package_diagram)
+    app.add_node(class_diagram)
     app.add_directive('message-list', MessageListDirective)
+    app.add_directive('package-diagram', PackageDiagramDirective)
+    app.add_directive('class-diagram', ClassDiagramDirective)
     app.add_config_value('pylint_debug', None, 'html')
     app.add_config_value('pylint_ignore', None, 'html')
     app.add_config_value('pylint_jobs', None, 'html')

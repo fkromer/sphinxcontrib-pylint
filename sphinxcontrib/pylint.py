@@ -258,26 +258,21 @@ def run_pylint(builder, options):
             builder.info('sphinxcontrib.pylint: option dicarded {}'.format(el))
             options.remove(el)
     if builder.config.pylint_debug:
-        builder.info('sphinxcontrib.pylint: {}'.format(options))
+        builder.info('sphinxcontrib.pylint: extension options - {}'.format(options))
 
     try:
         [el for el in options if isinstance(el, str)]
     except:
         raise ValueError('unknown format: {}'.format(el))
 
-    #print('{}'.format(os.getcwd()))
-    command = 'pylint --reports=no --output-format=parseable ' + ' '.join(options) + ' ' + 'bzr.py'
-    if builder.config.pylint_debug:
-        builder.info('sphinxcontrib.pylint: command - {}'.format(command))
-    p = Pylint('../bzr.py', reports=False)
+    p = Pylint('test.py', reports=False)  # invoke pylint on file-by-file basis 
     p._create_command()
     if builder.config.pylint_debug:
         builder.info('sphinxcontrib.pylint: command - {}'.format(p._Pylint__command_list))
+    package_root_dir = os.path.join(builder.srcdir, builder.config.pylint_package_dir)
     if builder.config.pylint_debug:
-        builder.info('sphinxcontrib.pylint: srcdir - {}'.format(builder.srcdir))
-    pylint_output, pylint_error = p.run(builder.srcdir)
-#    pylint_output = subprocess.Popen(['pylint', '--reports=no', '--msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}', '../bzr.py'], stdout=subprocess.PIPE)
-    #output = pylint_output.stdout.read().decode("utf-8")
+        builder.info('sphinxcontrib.pylint: package root dir - {}'.format(package_root_dir))
+    pylint_output, pylint_error = p.run(package_root_dir)
     if builder.config.pylint_debug:
         builder.info('sphinxcontrib.pylint: output -\n{}'.format(pylint_output))
     # TODO pylint message regexing 
@@ -402,6 +397,7 @@ def setup(app):
     app.add_directive('message-list', MessageListDirective)
     app.add_directive('package-diagram', PackageDiagramDirective)
     app.add_directive('class-diagram', ClassDiagramDirective)
+    app.add_config_value('pylint_package_dir', 'None', 'html')
     app.add_config_value('pylint_debug', None, 'html')
     app.add_config_value('pylint_ignore', None, 'html')
     app.add_config_value('pylint_jobs', None, 'html')

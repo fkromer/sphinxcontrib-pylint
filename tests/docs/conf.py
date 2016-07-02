@@ -21,6 +21,7 @@ html_theme = 'default'
 html_static_path = ['_static']
 
 # Options for pylint
+pylint_package_dir = '../package'
 pylint_debug = True
 pylint_ignore = ''
 pylint_jobs = '2'

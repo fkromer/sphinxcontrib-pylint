@@ -108,6 +108,71 @@ class ClassDiagramDirective(Directive):
             class_diagram_node['builtins'] = None
         return [class_diagram_node]
 
+class Pylint(object):
+    """
+    Initialization parameters are expected to equal the pylint CLI format.
+    No error hanling implemented yet.
+    """
+    def __init__(self, mod_or_pkg, errors_only=None, ignore=None, jobs=None, list_msgs=None, confidence=None, enable=None, disable=None, reports=None, msg_template='\'{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}\''):
+        self.module_or_package = mod_or_pkg
+        self.errors_only = errors_only
+        self.ignore = []
+        self.jobs = jobs
+        self.list_messages = list_msgs
+        self.confidence = confidence
+        self.__confidence_levels = ['HIGH', 'INFERENCE', 'INFERENCE_FAILURE', 'UNDEFINED']
+        self.enable = enable
+        self.disable = disable
+        self.reports = reports
+        self.message_template = msg_template
+        self.__option_list = []
+        self.__command_list = []
+
+    def _create_command(self):
+        """
+        >>> p = Pylint('test.py', reports=False)
+        >>> p._create_command()
+        ['pylint', '--reports=no', "--msg-template='{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}'", 'test.py']
+        """
+        if self.errors_only:
+            self.__option_list.append('--errors-only')
+        if (isinstance(self.ignore, str) or (isinstance(self.ignore, list)) and self.ignore):
+            self.__option_list.append('--ignore='+str(self.ignore))
+        if isinstance(self.jobs, int):
+            self.__option_list.append('--jobs'+str(self.jobs))
+        if self.list_messages:
+            self.__option_list.append('--list-msgs')
+        if self.confidence in self.__confidence_levels:
+            self.__option_list.append(self.confidence)
+        if self.enable:
+            self.__option_list.append('--enable'+self.enable)
+        if self.disable:
+            self.__option_list.append('--disable'+self.disable)
+        if self.reports == True:
+            self.__option_list.append('--reports=yes')
+        elif self.reports == False:
+            self.__option_list.append('--reports=no')
+        else:
+            pass
+        if self.message_template:
+            self.__option_list.append('--msg-template='+self.message_template)
+        self.__command_list.append('pylint')
+        for o in self.__option_list:
+            self.__command_list.append(o)
+        self.__command_list.append(self.module_or_package)
+        return self.__command_list
+
+    def run(self, srcdir):
+        PROCESS_TIMEOUT=10
+        command = self._create_command()
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=srcdir, universal_newlines=True)
+        try:
+            outs, errs = proc.communicate(timeout=PROCESS_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            outs, errs = proc.communicate()
+        return outs, errs
+
 class Pyreverse(object):
     def __init__(self, file_or_dir, output_format='dot', output_name=None, ancestor_depth=None, class_depth=None, module_consideration=False, filtering=None, classes_only=False, builtins=False, project=None):
         self.output_format = output_format
@@ -204,13 +269,18 @@ def run_pylint(builder, options):
     command = 'pylint --reports=no --output-format=parseable ' + ' '.join(options) + ' ' + 'bzr.py'
     if builder.config.pylint_debug:
         builder.info('sphinxcontrib.pylint: command - {}'.format(command))
-    # TODO pass the sphinx-doc source root directory as cwd to Popen
-    pylint_output = subprocess.Popen(['pylint', '--reports=no', '--msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}', '../bzr.py'], stdout=subprocess.PIPE)
-    output = pylint_output.stdout.read().decode("utf-8")
+    p = Pylint('../bzr.py', reports=False)
+    p._create_command()
     if builder.config.pylint_debug:
-        builder.info('sphinxcontrib.pylint: output - {}'.format(output))
-    
-    # GitHub Gist of andialbrecht about regex to parse errors from pylint output:
+        builder.info('sphinxcontrib.pylint: command - {}'.format(p._Pylint__command_list))
+    if builder.config.pylint_debug:
+        builder.info('sphinxcontrib.pylint: srcdir - {}'.format(builder.srcdir))
+    pylint_output, pylint_error = p.run(builder.srcdir)
+#    pylint_output = subprocess.Popen(['pylint', '--reports=no', '--msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}', '../bzr.py'], stdout=subprocess.PIPE)
+    #output = pylint_output.stdout.read().decode("utf-8")
+    if builder.config.pylint_debug:
+        builder.info('sphinxcontrib.pylint: output -\n{}'.format(pylint_output))
+    # TODO pylint message regexing 
     # https://gist.github.com/andialbrecht/917126
     PYLINT_ERROR_REGEX = re.compile(r"""^(?P<file>.+?):(?P<line>[0-9]+):\ # file name and line number
 \[(?P<type>[a-z])(?P<errno>\d+)   # message type and error number, e.g. E0101
@@ -218,11 +288,13 @@ def run_pylint(builder, options):
 (?P<msg>.*)                       # finally, the error message
 """, re.IGNORECASE|re.VERBOSE)
     #PYLINT_ERROR_REGEX = regexp.MustCompile('^(?P<file>.+?):(?P<line>[0-9]+): \[(?P<code>[A-Z][0-9]+)\((?P<key>.*)\), \] (?P<msg>.*)')
-    pylint_messages = re.match(PYLINT_ERROR_REGEX, output)
-    #for m in re.finditer(PYLINT_ERROR_REGEX, output):
-    #    builder.info('{}'.format(m.groups()))
+    pylint_messages = re.match(PYLINT_ERROR_REGEX, pylint_output)
     if builder.config.pylint_debug:
-        builder.info('sphinxcontrib.pylint: messages - {}'.format(pylint_messages))
+        builder.info('sphinxcontrib.pylint: messages -')
+    for m in re.finditer(PYLINT_ERROR_REGEX, pylint_output):
+        builder.info('{}'.format(m.groups()))
+    #if builder.config.pylint_debug:
+    #    builder.info('sphinxcontrib.pylint: messages - {}'.format(pylint_messages))
 
 def get_general_options(builder):
     general_options = ['--ignore=' + builder.config.pylint_ignore, '--jobs=' + builder.config.pylint_jobs]

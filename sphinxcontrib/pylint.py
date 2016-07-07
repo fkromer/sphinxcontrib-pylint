@@ -16,13 +16,14 @@ import subprocess
 from docutils import nodes
 from docutils.parsers.rst import directives
 from sphinx.util.compat import Directive
+from sphinx.ext.graphviz import graphviz
 
 options = []
 
 class message_list(nodes.General, nodes.Element):
     pass
 
-class package_diagram(nodes.General, nodes.Element):
+class package_diagram(graphviz):
     pass
 
 class class_diagram(nodes.General, nodes.Element):
@@ -60,7 +61,10 @@ class PackageDiagramDirective(Directive):
 
     """
     def run(self):
-        return [package_diagram('')]
+        package_diagram_node = graphviz()
+        package_diagram_node['code'] = 'digraph {A->FAKE->DOT->DIAGRAM}'  # TODO replace hardcoded dot code
+        package_diagram_node['options'] = {}
+        return [package_diagram_node]
 
 class ClassDiagramDirective(Directive):
     """
@@ -139,15 +143,15 @@ class Pylint(object):
         if (isinstance(self.ignore, str) or (isinstance(self.ignore, list)) and self.ignore):
             self.__option_list.append('--ignore='+str(self.ignore))
         if isinstance(self.jobs, int):
-            self.__option_list.append('--jobs'+str(self.jobs))
+            self.__option_list.append('--jobs='+str(self.jobs))
         if self.list_messages:
             self.__option_list.append('--list-msgs')
         if self.confidence in self.__confidence_levels:
-            self.__option_list.append(self.confidence)
+            self.__option_list.append('--confidence='+self.confidence)
         if self.enable:
-            self.__option_list.append('--enable'+self.enable)
+            self.__option_list.append('--enable='+self.enable)
         if self.disable:
-            self.__option_list.append('--disable'+self.disable)
+            self.__option_list.append('--disable='+self.disable)
         if self.reports == True:
             self.__option_list.append('--reports=yes')
         elif self.reports == False:
@@ -369,10 +373,9 @@ def on_doctree_resolved(self, doctree, docname):
         if self.builder.config.pylint_debug:
             self.builder.info('sphinxcontrib.pylint:   ... message list directive processed')
 
-    # output package diagrams TODO replace string fake output with dot code
+    # output package diagrams (graphviz dot representation)
     for node in doctree.traverse(package_diagram):
-        content = nodes.paragraph('', 'FAKE PACKAGE DIAGRAM OUTPUT')
-        node.replace_self(content)
+        node['code']
 
     # output class diagrams TODO replace string fake output with dot code
     for node in doctree.traverse(class_diagram):

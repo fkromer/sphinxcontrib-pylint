@@ -5,9 +5,12 @@ import os
 
 # manual build: sphinx-build -b html . _build
 
-sys.path.insert(0, os.path.abspath('../../sphinxcontrib')) # manual build: use this statement
+sys.path.insert(0, os.path.abspath('../../sphinxcontrib'))  # manual build: use this statement
 
-extensions = ['pylint'] # manual build: pylint instead of sphinxcontrib.pylint
+extensions = [
+    'sphinx.ext.graphviz',
+    'pylint'  # manual build: pylint instead of sphinxcontrib.pylint
+]
 templates_path = ['_templates']
 source_suffix = '.rst'
 master_doc = 'index'

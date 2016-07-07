@@ -1,6 +1,8 @@
 # sphinxcontrib-pylint
 Sphinx-doc extension for pylint integration.
 
+Developed and tested with pylint 1.5.5, astroid 1.4.5 and Python 3.4.3.
+
 ## Usage
 - In *conf.py* e.g. *./tests/docs/conf.py* (sphinx-doc configuration file) insert
   the pylint extension options `pylint_<option> = <option value>`.
